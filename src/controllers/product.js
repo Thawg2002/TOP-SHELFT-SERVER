@@ -118,5 +118,49 @@ export const updateProductById = async (req, res) => {
 //   } catch (error) {}
 // };
 
+// API để lấy sản phẩm liên quan
+// export const getRelatedProducts = async (req, res) => {
+//   const { categoryIds, productId } = req.params;
+//   // console.log("req.params", req.params);
+
+//   try {
+//     // Tìm tất cả các sản phẩm có cùng danh mục và không trùng với ID của sản phẩm hiện tại
+//     const relatedProducts = await Product.find({
+//       category: { $in: categoryIds.split(",") },
+//       _id: { $ne: productId },
+//     });
+
+//     return res.status(StatusCodes.OK).json(relatedProducts);
+//   } catch (error) {
+//     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error });
+//   }
+// };
+export const getRelatedProducts = async (req, res) => {
+  const { productId } = req.params;
+
+  try {
+    // Lấy sản phẩm hiện tại
+    const product = await Product.findById(productId).populate("category");
+    if (!product) {
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Sản phẩm không tồn tại!" });
+    }
+
+    // Lấy tất cả các ID danh mục của sản phẩm hiện tại
+    const categoryIds = product.category.map((cat) => cat._id);
+
+    // Tìm các sản phẩm khác cùng danh mục
+    const relatedProducts = await Product.find({
+      category: { $in: categoryIds },
+      _id: { $ne: productId },
+    });
+
+    return res.status(StatusCodes.OK).json(relatedProducts);
+  } catch (error) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error });
+  }
+};
+
 // iphone 13 product max => /product/iphone-13-product-max
 // GET /product/:slug
