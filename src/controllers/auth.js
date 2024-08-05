@@ -30,10 +30,10 @@ const signupSchema = Joi.object({
   }),
 });
 const generateRefreshToken = (userId) => {
-  return jwt.sign({ userId }, "123456", { expiresIn: "7d" });
+  return jwt.sign({ userId }, "123456", { expiresIn: "10d" });
 };
 const generateAccessToken = (userId) => {
-  return jwt.sign({ userId }, "123456", { expiresIn: "15m" });
+  return jwt.sign({ userId }, "123456", { expiresIn: "7d" });
 };
 export const signup = async (req, res) => {
   const { email, password } = req.body;

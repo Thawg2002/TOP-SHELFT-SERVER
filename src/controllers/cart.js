@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import Cart from "../models/cart";
+import Product from "../models/product";
 const findProductInCart = (cart, productId) => {
   return cart.products.find((item) => item.productId.toString() === productId);
 };
@@ -12,42 +13,108 @@ export const getCartByUserId = async (req, res) => {
       products: cart.products.map((item) => ({
         productId: item.productId._id,
         name: item.productId.name,
-        price: item.productId.price,
+        image: item.image,
+        price: item.price,
         quantity: item.quantity,
+        finalPrice: item.finalPrice,
       })),
     };
-    return res.status(StatusCodes.OK).json(cartData);
+    // console.log("cart", cart);
+
+    // console.log("cartData", cartData);
+
+    return res.status(StatusCodes.OK).json({
+      message: "Tổng số sản phẩm trong giỏ hàng",
+      cart: {
+        cartData: cartData,
+        finalTotalPrice: cart.finalTotalPrice,
+        totalQuantity: cart.totalQuantity,
+        totalDiscount: cart.totalDiscount,
+      },
+    });
   } catch (error) {}
 };
 // Thêm sản phẩm vào giỏ hàng
 export const addItemToCart = async (req, res) => {
-  const { userId, productId, quantity } = req.body;
   try {
-    // kiểm tra giỏ hàng có tồn tại chưa? dựa theo UserId
+    const { userId, productId, quantity } = req.body;
+    // console.log("req.body", req.body);
+
+    // Kiểm tra xem các trường bắt buộc đã có giá trị hay chưa
+    if (!userId || !productId || !quantity) {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json({ message: "Missing required fields" });
+    }
+
     let cart = await Cart.findOne({ userId });
-    // nếu giỏ hàng không tồn tại thì chúng ta tạo mới
     if (!cart) {
       cart = new Cart({ userId, products: [] });
-    }
-    const existProductIndex = cart.products.findIndex(
-      (item) => item.productId.toString() == productId
-    );
+    } //check tồn tại
 
-    // kiểm tra xem sản có tồn tại trong giỏ hàng không?
-    if (existProductIndex !== -1) {
-      // nếu mà sản phẩm tồn tại trong giỏ hàng thì chúng ta cập nhật số lượng
-      cart.products[existProductIndex].quantity += quantity;
-    } else {
-      // nếu sản phẩm chưa có trong giỏ hàng thì chúng ta thêm mới
-      cart.products.push({ productId, quantity });
+    const check = await cart.products.findIndex(
+      (product) => product.productId.toString() == productId
+    );
+    console.log(check);
+
+    // Tìm sản phẩm theo id
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json({ error: "Product not found" });
     }
+    // console.log("product", product);
+
+    const { regular_price, discount, image } = product;
+    const price = regular_price - regular_price * (discount / 100);
+    const finalPrice = price * quantity;
+    // console.log("regular_price", regular_price);
+    // console.log("discount", discount);
+    // console.log("finalPrice", finalPrice);
+    if (check !== -1) {
+      // Sản phẩm đã có trong giỏ hàng
+      const existingProduct = cart.products[check];
+      // Cập nhật số lượng nếu không vượt quá 10
+      if (existingProduct.quantity + quantity <= 10) {
+        existingProduct.quantity += quantity;
+        existingProduct.price = price;
+        existingProduct.finalPrice = price * existingProduct.quantity;
+        existingProduct.discount = discount;
+      } else {
+        return res
+          .status(StatusCodes.BAD_REQUEST)
+          .json({ error: "Quantity exceeds limit of 10" });
+      }
+    } else {
+      console.log("chưa có cart sẽ chạy vào đây");
+      // cart.products.push({ productId, quantity, price, finalPrice, discount });
+      cart.products.push({
+        productId,
+        quantity,
+        finalPrice: finalPrice,
+        discount,
+        image,
+        price,
+      });
+    }
+    cart.totalQuantity = cart.products.reduce(
+      (acc, item) => acc + item.quantity,
+      0
+    );
+    cart.totalPrice = cart.products.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
+    cart.totalDiscount = cart.products.reduce(
+      (acc, item) => acc + item.price * item.quantity * (item.discount / 100),
+      0
+    );
+    cart.finalTotalPrice = cart.totalPrice - cart.totalDiscount;
     await cart.save();
-    return res.status(StatusCodes.OK).json({ cart });
+    res.status(StatusCodes.CREATED).json(cart);
   } catch (error) {
-    // trả về client lỗi
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ error: "Internal Server Error" });
+    res.status(500).json({ message: error.message });
   }
 };
 // Xóa sản phẩm trong giỏ hàng thuộc 1 user
@@ -120,6 +187,22 @@ export const increaseProductQuantity = async (req, res) => {
     }
 
     product.quantity++;
+    product.finalPrice = product.price * product.quantity;
+
+    // Tính toán lại tổng số lượng, tổng giá, tổng chiết khấu và tổng giá cuối cùng
+    cart.totalQuantity = cart.products.reduce(
+      (acc, item) => acc + item.quantity,
+      0
+    );
+    cart.totalPrice = cart.products.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
+    cart.totalDiscount = cart.products.reduce(
+      (acc, item) => acc + item.price * item.quantity * (item.discount / 100),
+      0
+    );
+    cart.finalTotalPrice = cart.totalPrice - cart.totalDiscount;
 
     await cart.save();
     res.status(200).json(cart);
@@ -147,6 +230,23 @@ export const decreaseProductQuantity = async (req, res) => {
     if (product.quantity > 1) {
       product.quantity--;
     }
+
+    product.finalPrice = product.price * product.quantity;
+    
+    cart.totalQuantity = cart.products.reduce(
+      (acc, item) => acc + item.quantity,
+      0
+    );
+    cart.totalPrice = cart.products.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
+    cart.totalDiscount = cart.products.reduce(
+      (acc, item) => acc + item.price * item.quantity * (item.discount / 100),
+      0
+    );
+    cart.finalTotalPrice = cart.totalPrice - cart.totalDiscount;
+
     await cart.save();
     res.status(200).json(cart);
   } catch (error) {

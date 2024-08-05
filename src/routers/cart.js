@@ -4,6 +4,8 @@ import {
     addItemToCart,
     getCartByUserId,
     removeFromCart,
+    increaseProductQuantity,
+    decreaseProductQuantity,
 } from "../controllers/cart";
 
 const router = Router();
@@ -15,6 +17,8 @@ router.get("/carts/:userId", getCartByUserId);
 router.post("/carts/add-to-cart", addItemToCart);
 // Cập nhật số lượng của sản phẩm trong giỏ hàng từ button
 router.put("/carts/update", updateProductQuantity);
+router.put("/carts/increase", increaseProductQuantity);
+router.put("/carts/decrease", decreaseProductQuantity);
 // Xóa item trong giỏ hàng
 router.post("/carts/remove", removeFromCart);
 
