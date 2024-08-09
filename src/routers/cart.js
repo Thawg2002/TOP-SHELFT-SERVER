@@ -20,6 +20,6 @@ router.put("/carts/update", updateProductQuantity);
 router.put("/carts/increase", increaseProductQuantity);
 router.put("/carts/decrease", decreaseProductQuantity);
 // Xóa item trong giỏ hàng
-router.post("/carts/remove", removeFromCart);
+router.delete("/carts/remove", removeFromCart);
 
 export default router;
